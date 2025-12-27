@@ -1,7 +1,7 @@
 {
   "name": "app-blog",
   "version": "1.0.0",
-  "description": "projet 5 MERN cree par mohamed ouni",
+  "description": "projet 5 MERN cree par Aziz Romdhane",
   "private": true,
   "proxy": "http://localhost/3001",
   "main": "index.js",
@@ -15,7 +15,7 @@
     "react",
     "nodejs"
   ],
-  "author": "Mohamed Ouni",
+  "author": "Aziz Romdhane",
   "license": "MIT",
   "dependencies": {
     "bcrypt": "^5.1.1",

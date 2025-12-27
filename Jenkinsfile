@@ -7,106 +7,95 @@ pipeline {
 
     environment {
         DOCKERHUB_CREDENTIALS = credentials('dockerhub')
-        IMAGE_NAME_SERVER = 'mohamedouni374/mern-server'
-        IMAGE_NAME_CLIENT = 'mohamedouni374/mern-client'
+        IMAGE_NAME_SERVER = 'azizrom/mern-server'
+        IMAGE_NAME_CLIENT = 'azizrom/mern-client'
     }
 
     stages {
+
         stage('Checkout') {
             steps {
                 git branch: 'main',
-                    url: 'git@github.com:Mohamedouni1/mern-app.git',
+                    url: 'git@github.com:azizromdhane/mern-app.git',
                     credentialsId: 'github_ssh'
             }
         }
 
         stage('Build Server Image') {
-            when { changeset "server/*"}
+            when { changeset "server/**" }
             steps {
                 dir('server') {
                     script {
-                        dockerImageServer = docker.build("${IMAGE_NAME_SERVER}")
+                        dockerImageServer = docker.build("${IMAGE_NAME_SERVER}:${BUILD_NUMBER}")
                     }
                 }
             }
         }
 
         stage('Build Client Image') {
-            when { changeset "client/*"}
+            when { changeset "client/**" }
             steps {
                 dir('client') {
                     script {
-                        dockerImageClient = docker.build("${IMAGE_NAME_CLIENT}")
+                        dockerImageClient = docker.build("${IMAGE_NAME_CLIENT}:${BUILD_NUMBER}")
                     }
                 }
             }
         }
 
-        stage('Scan Server Image') {
-            when { changeset "server/*"}
+        stage('Scan Server Image (Trivy)') {
+            when { changeset "server/**" }
             steps {
-                script {
-                    sh """
-                    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \\
-                    -e TRIVY_DB_REPO=ghcr.io/aquasecurity/trivy-db \\
-                    aquasec/trivy:latest image --exit-code 0 --severity LOW,MEDIUM,HIGH,CRITICAL \\
-                    ${IMAGE_NAME_SERVER}
-                    """
-                }
+                sh """
+                docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+                aquasec/trivy:latest image \
+                --severity LOW,MEDIUM,HIGH,CRITICAL \
+                ${IMAGE_NAME_SERVER}:${BUILD_NUMBER} > trivy_server_report.txt
+                """
             }
         }
 
-        stage('Scan Client Image') {
-            when { changeset "client/*"}
+        stage('Scan Client Image (Trivy)') {
+            when { changeset "client/**" }
             steps {
-                script {
-                    sh """
-                    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \\
-                    -e TRIVY_DB_REPO=ghcr.io/aquasecurity/trivy-db \\
-                    aquasec/trivy:latest image --exit-code 0 --severity LOW,MEDIUM,HIGH,CRITICAL \\
-                    ${IMAGE_NAME_CLIENT}
-                    """
-                }
+                sh """
+                docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+                aquasec/trivy:latest image \
+                --severity LOW,MEDIUM,HIGH,CRITICAL \
+                ${IMAGE_NAME_CLIENT}:${BUILD_NUMBER} > trivy_client_report.txt
+                """
             }
         }
 
         stage('Push Server Image to Docker Hub') {
-            when { changeset "server/*"}
+            when { changeset "server/**" }
             steps {
                 script {
                     docker.withRegistry('https://index.docker.io/v1/', 'dockerhub') {
-                        dockerImageServer.push()
+                        dockerImageServer.push("${BUILD_NUMBER}")
                     }
                 }
             }
         }
+
         stage('Push Client Image to Docker Hub') {
-            when { changeset "client/*"}
+            when { changeset "client/**" }
             steps {
                 script {
                     docker.withRegistry('https://index.docker.io/v1/', 'dockerhub') {
-                        dockerImageClient.push()
+                        dockerImageClient.push("${BUILD_NUMBER}")
                     }
                 }
             }
-        }        
-
+        }
     }
+
     post {
         always {
-            script {
-                echo 'Cleanup phase!'
-                if (sh(script: "docker images -q aquasec/trivy", returnStdout: true).trim()) {
-                    sh 'docker rmi aquasec/trivy'               
-                }
-                if (sh(script: "docker images -q ${IMAGE_NAME_SERVER}", returnStdout: true).trim()) {
-                    sh "docker rmi ${IMAGE_NAME_SERVER}"
-                }
-                if (sh(script: "docker images -q ${IMAGE_NAME_CLIENT}", returnStdout: true).trim()) {
-                    sh "docker rmi ${IMAGE_NAME_CLIENT}"
-                }
-                echo 'Cleanup Succefully done!'
-            } 
+            archiveArtifacts artifacts: 'trivy_*_report.txt', fingerprint: true
+
+            sh 'docker system prune -af || true'
+            echo 'Cleanup successfully done!'
         }
     }
 }

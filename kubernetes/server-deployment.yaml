@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: mern-server
-        image: mohamedouni374/mern-server:latest
+        image: azizrom/mern-server:latest
         ports:
         - containerPort: 9000
         envFrom:
